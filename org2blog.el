@@ -619,7 +619,9 @@ from currently logged in."
         ;; Get the syntaxhl params and other info about the src_block
         (let* ((info (org-babel-get-src-block-info))
                (params (nth 2 info))
-               (code (org-html-protect (nth 1 info)))
+               (code (if (version-list-< (version-to-list (org-version)) '(8 0 0))
+                         (org-html-protect (nth 1 info))
+                       (org-html-encode-plain-text (nth 1 info))))
                (org-src-lang
                  (or (cdr (assoc (nth 0 info) org2blog/wp-shortcode-langs-map))
                      (nth 0 info)))
@@ -693,20 +695,9 @@ from currently logged in."
               (setq categories (if categories
                                    (split-string categories "\\( *, *\\)" t)
                                  "")))
-          (setq post-title (or (plist-get 
-                                ;; In org 8 this has been replaced by
-                                ;; org-export-get-enviroment
-                                (condition-case nil
-                                    (org-infile-export-plist)
-                                  (void-function
-                                   (org-export-get-environment))
-                                  ) :title)
+          (setq post-title (or (plist-get (org-infile-export-plist) :title)
                                "No Title"))
-          (setq excerpt (plist-get (condition-case nil
-                                       (org-infile-export-plist)
-                                     (void-function
-                                      (org-export-get-environment))
-                                     ) :description))
+          (setq excerpt (plist-get (org-infile-export-plist) :description))
           (setq permalink (org2blog/wp-get-option "PERMALINK"))
           (setq post-id (org2blog/wp-get-option "POSTID"))
           (setq post-par (org2blog/wp-get-post-parent
@@ -751,15 +742,14 @@ from currently logged in."
                     (condition-case nil
                         (org-export-as-html nil nil nil 'string t nil)
                       (wrong-number-of-arguments
-                       (org-export-as-html nil nil 'string t nil))
-                      ;; In org 8 this function has ben renamed
-                      (void-function
-                       (org-export-as 'html nil nil t nil))))
+                       (org-export-as-html nil nil 'string t nil))))
             (setq html-text
-                  (org-export-region-as-html
-                   (1+ (and (org-back-to-heading) (line-end-position)))
-                   (org-end-of-subtree)
-                   t 'string)))
+                  (if (version-list-< (version-to-list (org-version)) '(8 0 0))
+                      (org-export-region-as-html
+                       (1+ (and (org-back-to-heading) (line-end-position)))
+                       (org-end-of-subtree)
+                       t 'string)
+                    (org-export-as 'html nil nil t))))
           (setq html-text (org-no-properties html-text)))
 
         ;; Post-process as required.
@@ -775,20 +765,12 @@ from currently logged in."
      (cons "point" (point))
      (cons "subtree" narrow-p)
      (cons "date" post-date)
-     (cons "title" (condition-case nil
-                       ;; Fix api change in Org 8
-                       (org-html-do-expand post-title)
-                     (void-function
-                      (car post-title))))
+     (cons "title" (org-html-do-expand post-title))
      (cons "tags" tags)
      (cons "categories" categories)
      (cons "post-id" post-id)
      (cons "parent" post-par)
-     (cons "excerpt" (condition-case nil
-                         ;; Fix api change in Org 8
-                         (org-html-do-expand (or excerpt ""))
-                       (void-function
-                        (or excerpt ""))))
+     (cons "excerpt" (org-html-do-expand (or excerpt "")))
      (cons "permalink" (or permalink ""))
      (cons "description" html-text))))
 
